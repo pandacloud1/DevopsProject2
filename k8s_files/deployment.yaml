@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: netflix-app
-        image: pandacloud/my-repo:latest
+        image: pandacloud/webapp3:latest
         ports:
         - containerPort: 3000
