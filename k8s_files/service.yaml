@@ -7,9 +7,9 @@ metadata:
 spec:
   ports:
   - name: http
-    port: 3001
+    port: 3000
     protocol: TCP
-    targetPort: 3001
+    targetPort: 3000
   selector:
     app: netflix-app
   type: LoadBalancer
