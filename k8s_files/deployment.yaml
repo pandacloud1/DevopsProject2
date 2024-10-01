@@ -18,4 +18,4 @@ spec:
       - name: netflix-app
         image: pandacloud/webapp3:latest
         ports:
-        - containerPort: 3000
+        - containerPort: 3001
