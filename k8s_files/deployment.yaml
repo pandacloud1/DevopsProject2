@@ -1,21 +1,23 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: netflix-app
+  name: bluebird-app
   labels:
-    app: netflix-app
+    app: bluebird-app
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: netflix-app
+      app: bluebird-app
   template:
     metadata:
       labels:
-        app: netflix-app
+        app: bluebird-app
     spec:
       containers:
-      - name: netflix-app
-        image: gauris17/netflix:latest
+      - name: bluebird-app
+        image: <ecr-image-name>
         ports:
         - containerPort: 3000
+...
