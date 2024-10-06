@@ -1,0 +1,104 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'JDK'
+        nodejs 'NodeJS'
+    }
+    
+    parameters {
+        string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Enter your AWS region')
+        string(name: 'AWS_ACCOUNT_ID', defaultValue: '123456789000', description: 'Enter your AWS account ID')
+        string(name: 'ECR_REPO_NAME', defaultValue: 'amazon-prime', description: 'Enter repository name')
+    }
+
+    environment {
+        SCANNER_HOME = tool 'SonarQube-Scanner'
+    }
+    
+    stages {
+
+        stage ("Git checkout") {
+            steps {
+                git branch: 'main', url: 'https://github.com/yeshwanthlm/Prime-Video-Clone-Deployment.git'
+            }
+        }
+        
+        stage("Sonarqube Analysis") {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=amazon-prime \
+                    -Dsonar.projectKey=amazon-prime '''
+                }
+            }
+        }
+        
+        stage("Quality Gate") {
+           steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token' 
+                }
+            } 
+        }
+        
+        stage("Install npm") {
+            steps {
+                sh "npm install"
+            }
+        }
+   
+        stage ("Trivy Scan") {
+            steps {
+                sh "trivy fs . > trivy.txt"
+            }
+        }
+
+        stage ("Build Docker Image") {
+            steps {
+                sh "docker build -t ${params.ECR_REPO_NAME} ."
+            }
+        }
+
+        stage ("Create ECR Repository if not exists") {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
+                                     string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
+                        // Configure AWS CLI with credentials
+                        sh """
+                            aws configure set aws_access_key_id $AWS_ACCESS_KEY
+                            aws configure set aws_secret_access_key $AWS_SECRET_KEY
+                            aws configure set default.region ${params.AWS_REGION}
+                        """
+
+                        // Create ECR repository 
+                        sh """
+                            aws ecr describe-repositories --repository-names ${params.ECR_REPO_NAME} --region ${params.AWS_REGION} || \
+                            aws ecr create-repository --repository-name ${params.ECR_REPO_NAME} --region ${params.AWS_REGION}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage ("Tag & Push to ECR") {
+            steps {
+                script {
+				    withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
+                                     string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
+                        // Login to ECR
+                        sh "aws ecr get-login-password --region ${params.AWS_REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com"
+                    
+                        // Tag the image
+                        sh "docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:v${BUILD_NUMBER}"
+                        sh "docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
+                    
+                        // Push the image to ECR
+                        sh "docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:v${BUILD_NUMBER}"
+                        sh "docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
+                    }
+				}
+            }
+        }
+    } 
+}
