@@ -34,11 +34,47 @@ resource "aws_security_group" "my-sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Port 443 is required for HTTPS
+  ingress {
+    description     = "HTTPS Port"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Port 2379-2380 is required for etcd-cluster
+  ingress {
+    description     = "etc-cluster Port"
+    from_port       = 2379
+    to_port         = 2380
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+
   # Port 3000 is required for Grafana
   ingress {
     description     = "NPM Port"
     from_port       = 3000
     to_port         = 3000
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+
+  # Port 6443 is required for KubeAPIServer
+  ingress {
+    description     = "Kube API Server"
+    from_port       = 6443
+    to_port         = 6443
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+
+  # Port 10250-10260 is required for K8s
+  ingress {
+    description     = "K8s Ports"
+    from_port       = 10250
+    to_port         = 10260
     protocol        = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }  
@@ -57,6 +93,33 @@ resource "aws_security_group" "my-sg" {
     description     = "SonarQube Port"
     from_port       = 9000
     to_port         = 9000
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+
+  # Port 9090 is required for Prometheus
+  ingress {
+    description     = "Prometheus Port"
+    from_port       = 9090
+    to_port         = 9090
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+
+  # Port 9100 is required for Prometheus metrics server
+  ingress {
+    description     = "Prometheus Metrics Port"
+    from_port       = 9100
+    to_port         = 9100
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  } 
+
+  # Port 30000-32767 is required for NodePort
+  ingress {
+    description     = "K8s NodePort"
+    from_port       = 30000
+    to_port         = 32767
     protocol        = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }  
@@ -95,8 +158,94 @@ resource "aws_instance" "my-ec2" {
       host        = self.public_ip
     }
 
-    # Call the script file for EC2 initialization
-    script = "setup.sh"
+    inline = [
+      "sudo apt install unzip -y",
+      "curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o 'awscliv2.zip'",
+      "unzip awscliv2.zip",
+      "sudo ./aws/install",
+
+      # Install Docker
+      "sudo apt-get update -y",
+      "sudo apt-get install -y ca-certificates curl",
+      "sudo install -m 0755 -d /etc/apt/keyrings",
+      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc",
+      "sudo chmod a+r /etc/apt/keyrings/docker.asc",
+      "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
+      "sudo apt-get update -y",
+      "sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+      "sudo usermod -aG docker ubuntu",
+      "sudo chmod 777 /var/run/docker.sock",
+      "docker --version",
+
+      # Install Grafana 
+      #"sudo apt-get install -y apt-transport-https software-properties-common wget",
+      #"sudo mkdir -p /etc/apt/keyrings/",
+      #"wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null",
+      #"echo 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main' | sudo tee -a /etc/apt/sources.list.d/grafana.list",
+      #"echo 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com beta main' | sudo tee -a /etc/apt/sources.list.d/grafana.list",
+
+      "docker run -d --name grafana -p 3000:3000 grafana/grafana",
+
+      # Install Prometheus 
+      #"sudo wget https://github.com/prometheus/prometheus/releases/download/v3.0.0-beta.0/prometheus-3.0.0-beta.0.linux-amd64.tar.gz",
+      #"sudo tar -xvf prometheus-3.0.0-beta.0.linux-amd64.tar.gz",
+      #"cd prometheus-3.0.0-beta.0.linux-amd64/",
+      #"nohup ./prometheus --config.file=prometheus.yml > ~/prometheus.log 2>&1 &",
+      "docker run -d --name prometheus -p 9090:9090 prom/prometheus",
+
+      # Install SonarQube (as image)
+      "docker run -d --name sonar -p 9000:9000 sonarqube:lts-community",
+
+      # Install Trivy
+      "sudo apt-get install -y wget apt-transport-https gnupg",
+      "wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null",
+      "echo 'deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main' | sudo tee -a /etc/apt/sources.list.d/trivy.list",
+      "sudo apt-get update -y",
+      "sudo apt-get install trivy -y",
+
+      # Install Java 17
+      "sudo apt update -y",
+      "sudo apt install openjdk-17-jdk openjdk-17-jre -y",
+      "java -version",
+
+      # Install Kubectl
+      "curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.4/2024-09-11/bin/linux/amd64/kubectl",
+      "curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.4/2024-09-11/bin/linux/amd64/kubectl.sha256",
+      "sha256sum -c kubectl.sha256",
+      "openssl sha1 -sha256 kubectl",
+      "chmod +x ./kubectl",
+      "mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$PATH",
+      "echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc",
+      "kubectl version --client",
+
+      # Install ArgoCD
+      # Ref: https://argo-cd.readthedocs.io/en/stable/cli_installation/
+      "VERSION=$(curl -L -s https://raw.githubusercontent.com/argoproj/argo-cd/stable/VERSION)",
+      "curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/download/v$VERSION/argocd-linux-amd64",
+      "sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd",
+      "rm argocd-linux-amd64", 
+
+
+      # Install Jenkins
+      "sudo wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key",
+      "echo \"deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/\" | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null",
+      "sudo apt-get update -y",
+      "sudo apt-get install -y jenkins",
+      "sudo systemctl start jenkins",
+      "sudo systemctl enable jenkins",
+
+      # Get Jenkins initial login password
+      "ip=$(curl -s ifconfig.me)",
+      "pass=$(sudo cat /var/lib/jenkins/secrets/initialAdminPassword)",
+
+      # Output information
+      "echo 'Access Jenkins Server here --> http://'$ip':8080'",
+      "echo 'Jenkins Initial Password: '$pass''",
+      "echo 'Access SonarQube Server here --> http://'$ip':9000'",
+      "echo 'SonarQube Username & Password: admin'",
+      "echo 'Access Grafana Server here --> http://'$ip':3000'",
+      "echo 'Access Prometheus Server here --> http://'$ip':9090'",
+    ]
   }
 }  
 
