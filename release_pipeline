@@ -16,7 +16,7 @@ pipeline {
                 git branch: 'main', url: 'https://github.com/pandacloud1/DevopsProject2.git'
             }
         }
-
+		
         stage("Login to EKS") {
             steps {
                 script {
@@ -29,11 +29,25 @@ pipeline {
                 }
             }
         }
+
+        // ----------------------------------------------------
+	// USE THIS STAGE TO DEPLOY IMAGE DIRECTLY W/O ARGOCD
+        // ----------------------------------------------------
+        //stage("Deploy to EKS") {
+            //steps {
+                //script {
+                        // Apply the deployment and service files
+                        //sh "kubectl apply -f k8s_files/deployment.yaml"
+                        //sh "kubectl apply -f k8s_files/service.yaml
+                //}
+            //}
+        //}
 		
         stage ("Use Versioned Image") {
             steps {
                 script {
                         sh """
+                        ls
                         def ECR_IMAGE_NAME = "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION_NAME}.amazonaws.com/${ECR_REPO_NAME}:${VERSION}"
                         sed -i "s|image: .*|image: ${ECR_IMAGE_NAME}|" k8s_files/deployment.yaml
                         """
@@ -41,12 +55,22 @@ pipeline {
             }
         }		
 
-        stage("Deploy to EKS") {
+
+        stage("Configure ArgoCD") {
             steps {
                 script {
-                        // Apply the deployment and service files
-                        sh "kubectl apply -f k8s_files/deployment.yaml"
-                        sh "kubectl apply -f k8s_files/service.yaml
+                        sh """
+                        kubectl create namespace argocd
+                        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+                        kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+                        url=$(kubectl get svc -n argocd | grep argocd-server | awk '{print$4}' | head -n 1)
+                        pass1=$(argocd admin initial-password -n argocd)
+                        echo "Access ArgoCD Server:"
+                        echo "$url"
+                        echo
+                        echo "Username: admin"
+                        echo "Password: $pass1 | head -n 1"
+                        """
                 }
             }
         }
