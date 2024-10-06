@@ -84,7 +84,7 @@ pipeline {
         stage ("Tag & Push to ECR") {
             steps {
                 script {
-				    withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
+		    withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
                                      string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
                         // Login to ECR
                         sh "aws ecr get-login-password --region ${params.AWS_REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com"
@@ -97,7 +97,7 @@ pipeline {
                         sh "docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:v${BUILD_NUMBER}"
                         sh "docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest"
                     }
-				}
+		}
             }
         }
     } 
