@@ -16,8 +16,8 @@ pipeline {
                 git branch: 'main', url: 'https://github.com/pandacloud1/DevopsProject2.git'
             }
         }
-		
-		stage("Login to EKS") {
+
+        stage("Login to EKS") {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
@@ -30,13 +30,13 @@ pipeline {
             }
         }
 		
-		stage ("Use Versioned Image") {
-		    steps {
-			    script {
-				       sh """
-					   def ECR_IMAGE_NAME = "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION_NAME}.amazonaws.com/${ECR_REPO_NAME}:${VERSION}"
-					   sed -i "s|image: .*|image: ${ECR_IMAGE_NAME}|" k8s_files/deployment.yaml
-                       """
+        stage ("Use Versioned Image") {
+            steps {
+                script {
+                        sh """
+                        def ECR_IMAGE_NAME = "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION_NAME}.amazonaws.com/${ECR_REPO_NAME}:${VERSION}"
+                        sed -i "s|image: .*|image: ${ECR_IMAGE_NAME}|" k8s_files/deployment.yaml
+                        """
                 }	
             }
         }		
