@@ -59,7 +59,7 @@ pipeline {
             }
         }
 
-        stage ("Create ECR Repository if not exists") {
+        stage ("Create ECR Repository") {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
