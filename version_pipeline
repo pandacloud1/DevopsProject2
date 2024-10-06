@@ -41,7 +41,7 @@ pipeline {
         }		
 
         // ----------------------------------------------------
-	      // USE THIS STAGE TO DEPLOY IMAGE AS PER THE VERSION NO
+	// USE THIS STAGE TO DEPLOY IMAGE AS PER THE VERSION NO
         // ----------------------------------------------------
         stage("Deploy to EKS") {
             steps {
