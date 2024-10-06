@@ -20,7 +20,7 @@ pipeline {
 
         stage ("Git checkout") {
             steps {
-                git branch: 'main', url: 'https://github.com/yeshwanthlm/Prime-Video-Clone-Deployment.git'
+                git branch: 'main', url: 'https://github.com/pandacloud1/DevopsProject2.git'
             }
         }
         
