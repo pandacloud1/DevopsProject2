@@ -197,12 +197,6 @@ resource "aws_instance" "my-ec2" {
       "sudo apt-get update -y",
       "sudo apt-get install trivy -y",
 
-      # Install Java 17
-      # Ref: https://www.rosehosting.com/blog/how-to-install-java-17-lts-on-ubuntu-20-04/
-      "sudo apt update -y",
-      "sudo apt install openjdk-17-jdk openjdk-17-jre -y",
-      "java -version",
-
       # Install Kubectl
       # Ref: https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#kubectl-install-update
       "curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.4/2024-09-11/bin/linux/amd64/kubectl",
@@ -221,6 +215,11 @@ resource "aws_instance" "my-ec2" {
       "sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd",
       "rm argocd-linux-amd64", 
 
+      # Install Java 17
+      # Ref: https://www.rosehosting.com/blog/how-to-install-java-17-lts-on-ubuntu-20-04/
+      "sudo apt update -y",
+      "sudo apt install openjdk-17-jdk openjdk-17-jre -y",
+      "java -version",
 
       # Install Jenkins
       # Ref: https://www.jenkins.io/doc/book/installing/linux/#debianubuntu
