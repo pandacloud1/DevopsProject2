@@ -70,15 +70,6 @@ resource "aws_security_group" "my-sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }  
 
-  # Port 10250-10260 is required for K8s
-  ingress {
-    description     = "K8s Ports"
-    from_port       = 10250
-    to_port         = 10260
-    protocol        = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }  
-
   # Port 8080 is required for Jenkins
   ingress {
     description     = "Jenkins Port"
@@ -114,6 +105,15 @@ resource "aws_security_group" "my-sg" {
     protocol        = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   } 
+
+  # Port 10250-10260 is required for K8s
+  ingress {
+    description     = "K8s Ports"
+    from_port       = 10250
+    to_port         = 10260
+    protocol        = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
 
   # Port 30000-32767 is required for NodePort
   ingress {
@@ -159,12 +159,15 @@ resource "aws_instance" "my-ec2" {
     }
 
     inline = [
+      # Install AWS CLI
+      # Ref: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
       "sudo apt install unzip -y",
       "curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o 'awscliv2.zip'",
       "unzip awscliv2.zip",
       "sudo ./aws/install",
 
       # Install Docker
+      # Ref: https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
       "sudo apt-get update -y",
       "sudo apt-get install -y ca-certificates curl",
       "sudo install -m 0755 -d /etc/apt/keyrings",
@@ -177,26 +180,17 @@ resource "aws_instance" "my-ec2" {
       "sudo chmod 777 /var/run/docker.sock",
       "docker --version",
 
-      # Install Grafana 
-      #"sudo apt-get install -y apt-transport-https software-properties-common wget",
-      #"sudo mkdir -p /etc/apt/keyrings/",
-      #"wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null",
-      #"echo 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main' | sudo tee -a /etc/apt/sources.list.d/grafana.list",
-      #"echo 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com beta main' | sudo tee -a /etc/apt/sources.list.d/grafana.list",
-
+      # Install Grafana (as container)
       "docker run -d --name grafana -p 3000:3000 grafana/grafana",
 
-      # Install Prometheus 
-      #"sudo wget https://github.com/prometheus/prometheus/releases/download/v3.0.0-beta.0/prometheus-3.0.0-beta.0.linux-amd64.tar.gz",
-      #"sudo tar -xvf prometheus-3.0.0-beta.0.linux-amd64.tar.gz",
-      #"cd prometheus-3.0.0-beta.0.linux-amd64/",
-      #"nohup ./prometheus --config.file=prometheus.yml > ~/prometheus.log 2>&1 &",
+      # Install Prometheus (as container)
       "docker run -d --name prometheus -p 9090:9090 prom/prometheus",
 
-      # Install SonarQube (as image)
+      # Install SonarQube (as container)
       "docker run -d --name sonar -p 9000:9000 sonarqube:lts-community",
 
       # Install Trivy
+      # Ref: https://aquasecurity.github.io/trivy/v0.18.3/installation/
       "sudo apt-get install -y wget apt-transport-https gnupg",
       "wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null",
       "echo 'deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main' | sudo tee -a /etc/apt/sources.list.d/trivy.list",
@@ -204,11 +198,13 @@ resource "aws_instance" "my-ec2" {
       "sudo apt-get install trivy -y",
 
       # Install Java 17
+      # Ref: https://www.rosehosting.com/blog/how-to-install-java-17-lts-on-ubuntu-20-04/
       "sudo apt update -y",
       "sudo apt install openjdk-17-jdk openjdk-17-jre -y",
       "java -version",
 
       # Install Kubectl
+      # Ref: https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html#kubectl-install-update
       "curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.4/2024-09-11/bin/linux/amd64/kubectl",
       "curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.4/2024-09-11/bin/linux/amd64/kubectl.sha256",
       "sha256sum -c kubectl.sha256",
@@ -227,6 +223,7 @@ resource "aws_instance" "my-ec2" {
 
 
       # Install Jenkins
+      # Ref: https://www.jenkins.io/doc/book/installing/linux/#debianubuntu
       "sudo wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key",
       "echo \"deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/\" | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null",
       "sudo apt-get update -y",
@@ -238,7 +235,7 @@ resource "aws_instance" "my-ec2" {
       "ip=$(curl -s ifconfig.me)",
       "pass=$(sudo cat /var/lib/jenkins/secrets/initialAdminPassword)",
 
-      # Output information
+      # Output
       "echo 'Access Jenkins Server here --> http://'$ip':8080'",
       "echo 'Jenkins Initial Password: '$pass''",
       "echo 'Access SonarQube Server here --> http://'$ip':9000'",
