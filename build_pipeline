@@ -68,6 +68,7 @@ pipeline {
                     withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
                                      string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
                         // Configure AWS CLI with credentials
+                        // Ref: https://docs.aws.amazon.com/cli/latest/reference/configure/set.html#examples
                         sh """
                             aws configure set aws_access_key_id $AWS_ACCESS_KEY
                             aws configure set aws_secret_access_key $AWS_SECRET_KEY
