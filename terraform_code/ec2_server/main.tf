@@ -206,7 +206,17 @@ resource "aws_instance" "my-ec2" {
       "chmod +x ./kubectl",
       "mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$PATH",
       "echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc",
+      "sudo mv $HOME/bin/kubectl /usr/local/bin/kubectl",
+      "sudo chmod +x /usr/local/bin/kubectl",
       "kubectl version --client",
+
+      # Install Helm
+      # Ref: https://helm.sh/docs/intro/install/
+      # Ref (for .tar.gz file): https://github.com/helm/helm/releases
+      "wget https://get.helm.sh/helm-v3.16.1-linux-amd64.tar.gz",
+      "tar -zxvf helm-v3.16.1-linux-amd64.tar.gz",
+      "sudo mv linux-amd64/helm /usr/local/bin/helm",
+      "helm version",
 
       # Install ArgoCD
       # Ref: https://argo-cd.readthedocs.io/en/stable/cli_installation/
