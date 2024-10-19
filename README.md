@@ -26,10 +26,11 @@ This project demonstrates deploying an Amazon Prime clone using a set of DevOps 
 2. **Key Pair**: Create a key pair named `key` for accessing your EC2 instances.
 
 ## Infrastructure Setup Using Terraform
-1. **Clone the Repository**:
+1. **Clone the Repository** (Open Command Prompt & run below):
    ```bash
    git clone https://github.com/pandacloud1/DevopsProject2.git
    cd DevopsProject2
+   code .   # this command will open VS code in backend
    ```
 2. **Initialize and Apply Terraform**:
    - Open `terraform_code/ec2_server/main.tf` in VS Code.
