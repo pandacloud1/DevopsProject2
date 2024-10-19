@@ -73,85 +73,119 @@ This will create the EC2 instance, security groups, and install necessary tools 
 Create and run the build pipeline in Jenkins. The pipeline will build, analyze, and push the project Docker image to ECR.
 Create a Jenkins pipeline by adding the following script:
 
-groovy
-Copy code
+```groovy
 pipeline {
     agent any
+    
     parameters {
-        string(name: 'AWS_REGION', defaultValue: 'us-east-1', description: 'Enter your AWS region')
-        string(name: 'AWS_ACCOUNT_ID', defaultValue: '123456789000', description: 'Enter your AWS account ID')
         string(name: 'ECR_REPO_NAME', defaultValue: 'amazon-prime', description: 'Enter repository name')
+        string(name: 'AWS_ACCOUNT_ID', defaultValue: '123456789012', description: 'Enter AWS Account ID') // Added missing quote
     }
+    
+    tools {
+        jdk 'JDK'
+        nodejs 'NodeJS'
+    }
+    
     environment {
         SCANNER_HOME = tool 'SonarQube Scanner'
-        AWS_ACCESS_KEY_ID = credentials('access-key')
-        AWS_SECRET_ACCESS_KEY = credentials('secret-key')
     }
-    tools {
-        nodejs 'node16'
-        jdk 'jdk17'
-        dockerTool 'docker'
-    }
+    
     stages {
-        stage('Checkout') {
+        stage('1. Git Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/pandacloud1/DevopsProject2.git'
             }
         }
-        stage('SonarQube Analysis') {
+        
+        stage('2. SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonar-server') {
-                    sh "$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=amazon-prime -Dsonar.projectKey=amazon-prime"
-                }
-            }
-        }
-        stage('Quality Gate') {
-            steps {
-                waitForQualityGate abortPipeline: true
-            }
-        }
-        stage('Install NPM Dependencies') {
-            steps {
-                sh 'npm install'
-            }
-        }
-        stage('Trivy Scan') {
-            steps {
-                sh 'trivy fs . > trivy.txt'
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    def image = docker.build("${params.ECR_REPO_NAME}:${env.BUILD_NUMBER}")
-                }
-            }
-        }
-        stage('Push to ECR') {
-            steps {
-                script {
+                withSonarQubeEnv ('sonar-server') {
                     sh """
-                        aws ecr get-login-password --region ${params.AWS_REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com
-                        docker tag ${params.ECR_REPO_NAME}:${env.BUILD_NUMBER} ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest
-                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.BUILD_NUMBER}
-                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com/${params.ECR_REPO_NAME}:latest
+                    $SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectName=amazon-prime \
+                    -Dsonar.projectKey=amazon-prime
                     """
                 }
             }
         }
-        stage('Cleanup Docker Images') {
+        
+        stage('3. Quality Gate') {
             steps {
-                sh 'docker rmi $(docker images -q)'
+                waitForQualityGate abortPipeline: false, 
+                credentialsId: 'sonar-token'
+            }
+        }
+        
+        stage('4. Install npm') {
+            steps {
+                sh "npm install"
+            }
+        }
+        
+        stage('5. Trivy Scan') {
+            steps {
+                sh "trivy fs . > trivy.txt"
+            }
+        }
+        
+        stage('6. Build Docker Image') {
+            steps {
+                sh "docker build -t ${params.ECR_REPO_NAME} ."
+            }
+        }
+        
+        stage('7. Create ECR repo') {
+            steps {
+                withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'), 
+                                 string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
+                    sh """
+                    aws configure set aws_access_key_id $AWS_ACCESS_KEY
+                    aws configure set aws_secret_access_key $AWS_SECRET_KEY
+                    aws ecr describe-repositories --repository-names ${params.ECR_REPO_NAME} --region us-east-1 || \
+                    aws ecr create-repository --repository-name ${params.ECR_REPO_NAME} --region us-east-1
+                    """
+                }
+            }
+        }
+        
+        stage('8. Login to ECR & tag image') {
+            steps {
+                withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'), 
+                                 string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
+                    sh """
+                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+                    docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:${BUILD_NUMBER}
+                    docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('9. Push image to ECR') {
+            steps {
+                withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'), 
+                                 string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
+                    sh """
+                    docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:${BUILD_NUMBER}
+                    docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('10. Cleanup Images') {
+            steps {
+                sh """
+                docker rmi ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:${BUILD_NUMBER}
+                docker rmi ${params.AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
+		docker images
+                """
             }
         }
     }
-    post {
-        always {
-            cleanWs()
-        }
-    }
 }
-Run the pipeline: Execute 
+```
 
 ## Continuous Deployment with ArgoCD
 1. **Create EKS Cluster**: Use Terraform to create an EKS cluster and related resources.
