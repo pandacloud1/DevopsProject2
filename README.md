@@ -73,6 +73,8 @@ This will create the EC2 instance, security groups, and install necessary tools 
 Create and run the build pipeline in Jenkins. The pipeline will build, analyze, and push the project Docker image to ECR.
 Create a Jenkins pipeline by adding the following script:
 
+### Build Pipeline
+
 ```groovy
 pipeline {
     agent any
@@ -192,9 +194,148 @@ pipeline {
 2. **Deploy Amazon Prime Clone**: Use ArgoCD to deploy the application using Kubernetes YAML files.
 3. **Monitoring Setup**: Install Prometheus and Grafana using Helm charts for monitoring the Kubernetes cluster.
 
+### Deployment Pipeline
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        KUBECTL = '/usr/local/bin/kubectl'
+    }
+
+    parameters {
+        string(name: 'CLUSTER_NAME', defaultValue: 'amazon-prime-cluster', description: 'Enter your EKS cluster name')
+    }
+
+    stages {
+        stage("Login to EKS") {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
+                                     string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
+                        sh "aws eks --region us-east-1 update-kubeconfig --name ${params.CLUSTER_NAME}"
+                    }
+                }
+            }
+        }
+
+        stage("Configure Prometheus & Grafana") {
+            steps {
+                script {
+                    sh """
+                    helm repo add stable https://charts.helm.sh/stable || true
+                    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
+                    # Check if namespace 'prometheus' exists
+                    if kubectl get namespace prometheus > /dev/null 2>&1; then
+                        # If namespace exists, upgrade the Helm release
+                        helm upgrade stable prometheus-community/kube-prometheus-stack -n prometheus
+                    else
+                        # If namespace does not exist, create it and install Helm release
+                        kubectl create namespace prometheus
+                        helm install stable prometheus-community/kube-prometheus-stack -n prometheus
+                    fi
+                    kubectl patch svc stable-kube-prometheus-sta-prometheus -n prometheus -p '{"spec": {"type": "LoadBalancer"}}'
+                    kubectl patch svc stable-grafana -n prometheus -p '{"spec": {"type": "LoadBalancer"}}'
+                    """
+                }
+            }
+        }
+
+        stage("Configure ArgoCD") {
+            steps {
+                script {
+                    sh """
+                    # Install ArgoCD
+                    kubectl create namespace argocd || true
+                    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+                    kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+                    """
+                }
+            }
+        }
+		
+    }
+}
+```
+
 ## Cleanup
 - Run cleanup pipelines to delete the resources such as load balancers, services, and deployment files.
 - Use `terraform destroy` to remove the EKS cluster and other infrastructure.
+
+### Cleanup Pipeline
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        KUBECTL = '/usr/local/bin/kubectl'
+    }
+
+    parameters {
+        string(name: 'CLUSTER_NAME', defaultValue: 'amazon-prime-cluster', description: 'Enter your EKS cluster name')
+    }
+
+    stages {
+
+        stage("Login to EKS") {
+            steps {
+                script {
+                    withCredentials([string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
+                                     string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')]) {
+                        sh "aws eks --region us-east-1 update-kubeconfig --name ${params.CLUSTER_NAME}"
+                    }
+                }
+            }
+        }
+        
+        stage('Cleanup K8s Resources') {
+            steps {
+                script {
+                    // Step 1: Delete services and deployments
+                    sh 'kubectl delete svc kubernetes || true'
+                    sh 'kubectl delete deploy pandacloud-app || true'
+                    sh 'kubectl delete svc pandacloud-app || true'
+
+                    // Step 2: Delete ArgoCD installation and namespace
+                    sh 'kubectl delete -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || true'
+                    sh 'kubectl delete namespace argocd || true'
+
+                    // Step 3: List and uninstall Helm releases in prometheus namespace
+                    sh 'helm list -n prometheus || true'
+                    sh 'helm uninstall kube-stack -n prometheus || true'
+                    
+                    // Step 4: Delete prometheus namespace
+                    sh 'kubectl delete namespace prometheus || true'
+
+                    // Step 5: Remove Helm repositories
+                    sh 'helm repo remove stable || true'
+                    sh 'helm repo remove prometheus-community || true'
+                }
+            }
+        }
+		
+        stage('Delete ECR Repository and KMS Keys') {
+            steps {
+                script {
+                    // Step 1: Delete ECR Repository
+                    sh '''
+                    aws ecr delete-repository --repository-name amazon-prime --region us-east-1 --force
+                    '''
+
+                    // Step 2: Delete KMS Keys
+                    sh '''
+                    for key in $(aws kms list-keys --region us-east-1 --query "Keys[*].KeyId" --output text); do
+                        aws kms disable-key --key-id $key --region us-east-1
+                        aws kms schedule-key-deletion --key-id $key --pending-window-in-days 7 --region us-east-1
+                    done
+                    '''
+                }
+            }
+        }		
+		
+    }
+}
+```
 
 ## Additional Information
 For further details, refer to the word document containing a complete write-up of the project.
