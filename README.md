@@ -84,5 +84,3 @@ Create and run the build pipeline in Jenkins. The pipeline will build, analyze, 
 For further details, refer to the word document containing a complete write-up of the project.
 
 ---
-
-This README provides a summary of the Amazon Prime Clone deployment process using various DevOps tools and practices.
