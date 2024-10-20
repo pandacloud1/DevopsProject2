@@ -180,12 +180,6 @@ resource "aws_instance" "my-ec2" {
       "sudo chmod 777 /var/run/docker.sock",
       "docker --version",
 
-      # Install Grafana (as container)
-      "docker run -d --name grafana -p 3000:3000 grafana/grafana",
-
-      # Install Prometheus (as container)
-      "docker run -d --name prometheus -p 9090:9090 prom/prometheus",
-
       # Install SonarQube (as container)
       "docker run -d --name sonar -p 9000:9000 sonarqube:lts-community",
 
@@ -249,8 +243,6 @@ resource "aws_instance" "my-ec2" {
       "echo 'Jenkins Initial Password: '$pass''",
       "echo 'Access SonarQube Server here --> http://'$ip':9000'",
       "echo 'SonarQube Username & Password: admin'",
-      "echo 'Access Grafana Server here --> http://'$ip':3000'",
-      "echo 'Access Prometheus Server here --> http://'$ip':9090'",
     ]
   }
 }  
